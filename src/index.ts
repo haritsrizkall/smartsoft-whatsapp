@@ -1,38 +1,27 @@
 import cron from 'node-cron';
-import sql from 'mssql';
+import 'dotenv/config';
+import { Account } from './types';
+import { getAccount, deleteAccount } from './db';
+import { sendWa } from './lib/wa'
 
-const sqlConfig: sql.config = {
-  user: "sa",
-  password: "123456",
-  database: "wa",
-  server: 'localhost',
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000
-  },
-  options: {
-    trustServerCertificate: true // change to true for local dev / self-signed certs
-  }
-}
+cron.schedule('*/10 * * * * *', () => {
+  console.log('running a task every 10 second');
+  getAccount().then((tables) => {
+    const accounts: Account[] = tables
+    accounts.forEach((account) => {
+      console.log("send to", account.no_wa)
+      sendWa(account.no_wa, `Halo ${account.name}, ini adalah pesan dari bot`)
+        .then((res:any) => {
+          const data = res.data
+          deleteAccount(account.no_wa)
+        }).catch((err) => {
+          console.log(err.response.data)
+        })
+    })
+  }).catch((err) => {
+    console.log(err)
+  })
+});
 
-const getTables = async () => {
-  const pool = await sql.connect(sqlConfig)
-  const result = await pool.request().query(`
-    SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'
-  `)
-  return result.recordset
-}
 
-// cron.schedule('* * * * * *', () => {
-//   getTables().then((tables) => {
-//     console.log(tables)
-//   }).catch((err) => {
-//     console.log(err)
-//   })
-// });
-getTables().then((tables) => {
-  console.log(tables)
-}).catch((err) => {
-  console.log(err)
-})
+
